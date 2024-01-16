@@ -1,0 +1,351 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+#include "config.h"  // Sustituir con datos de vuestra red
+#include "API.hpp"
+#include "ESP32_Utils.hpp"
+
+#include "RTClib.h"
+
+WiFiClient client;
+ 
+
+RTC_Millis rtc;
+ float Par_1=0;
+ float Par_2=0;
+ float Par_3=0;
+ float Par_4=0;
+ float Par_5=0;
+ 
+
+    String sensor1Cor1 = "";
+    String sensor2Cor1 = "";
+    String sensor3Cor1 = "";
+    String sensor4Cor1 = "";
+    String sensor5Cor1 = "";
+    String sensor6Cor1 = "";
+    String sensor7Cor1 = "";
+    String sensor8Cor1 = "";
+
+    String fechaCor2 = "";
+    String sensor1Cor2 = "";
+    String sensor2Cor2 = "";
+    String sensor3Cor2 = "";
+    String sensor4Cor2 = "";
+    String sensor5Cor2 =  "";
+    String sensor6Cor2 =  "";
+    String sensor7Cor2 = "";
+    String sensor8Cor2 = "";
+
+    String json_string;
+
+const int serverPort = 80;
+String Estados_s1="";
+String Estados_sa1="";
+int Estados_a1=0;
+String Estados_Fecha_1="";
+String Estados_Fecha_1_loc="";
+
+String Estados_Fecha_1_web="";
+String Estados_s1_loc="";
+String Estados_s1_web="";
+
+String Estados_s1_ant="";
+
+
+String Estados_s2="";
+String Estados_sa2="";
+int Estados_a2=0;
+String Estados_Fecha_2="";
+
+String Ip_local="";
+ int reset_por_wifi=0;
+void setup() 
+{
+	Serial.begin(115200);
+
+  
+ 	ConnectWiFi_STA();
+	 rtc.begin(DateTime(F(__DATE__), F(__TIME__)));
+   delay(10000);
+   String cadena = "{\"Nombre\":\"Res_Cor_1\",\"Fecha\":\"2023-09-04 19:43:04\",\"Ultimo\":421579,\"Estados\":\"00011111\",\"Actu\":\"0\",\"Par_1\":\"150\",\"Par_2\":\"222\",\"Par_3\":\"11\",\"Par_4\":\"55\"}";
+   Serial.println(cadena);
+
+}
+ void enviardatos() {
+  
+  
+    DateTime now = rtc.now();
+    
+ char Fecha_format[24];
+ sprintf(Fecha_format, "%04d/%02d/%02d %02d:%02d:%02d",now.year(), now.month(), now.day(),now.hour(),now.minute(),now.second());
+
+
+
+ String Cliente_nombre ="Kotsala";
+ 
+ StaticJsonDocument<300> jsonDoc;
+ jsonDoc["Nombre"] = "Cor_1";
+   jsonDoc["Fecha"] = Fecha_format;
+   jsonDoc["Sensor1"] = sensor1Cor1;
+    jsonDoc["Sensor2"] = sensor2Cor1;
+     jsonDoc["Sensor3"] = sensor3Cor1;
+      jsonDoc["Sensor4"] = sensor4Cor1;
+       jsonDoc["Sensor5"] = sensor5Cor1;
+        jsonDoc["Sensor6"] = sensor6Cor1;
+         jsonDoc["Sensor7"] = sensor7Cor1;
+          jsonDoc["Sensor8"] = sensor8Cor1;
+          jsonDoc["Estados_1"] =  Estados_s1;
+          jsonDoc["Estados_2"] =  "00000000";
+            jsonDoc["Cliente"] = Cliente_nombre;
+        jsonDoc["Dispo"] = "Cor_1";   
+
+        
+             
+   serializeJson(jsonDoc, json_string);
+
+
+   
+ /* String json_string_2; 
+ jsonDoc["Nombre"] = "Cor_2";
+   jsonDoc["Fecha"] = Fecha_format;
+   jsonDoc["Sensor1"] = sensor1Cor2;
+    jsonDoc["Sensor2"] = sensor2Cor2;
+     jsonDoc["Sensor3"] = sensor3Cor2;
+      jsonDoc["Sensor4"] = sensor4Cor2;
+       jsonDoc["Sensor5"] = sensor5Cor2;
+        jsonDoc["Sensor6"] = sensor6Cor2;
+         jsonDoc["Sensor7"] = sensor7Cor2;
+          jsonDoc["Sensor8"] = sensor8Cor2;
+          jsonDoc["Estados_1"] = "00000000";
+          jsonDoc["Estados_2"] = "00000000";
+            jsonDoc["Cliente"] = Cliente_nombre;
+            
+   serializeJson(jsonDoc, json_string_2);
+
+
+     json_string=json_string+"\n"+json_string_2+"\n";
+     //   Serial.print(json_string);*/
+}
+int intentos_raspberry=0;
+void loop() 
+{      
+   json_string="";  
+   enviardatos();  
+ String respuesta_bc =  postWeb(json_string);
+
+String json_modificado="";
+  StaticJsonDocument<500> doc;
+  DeserializationError error = deserializeJson(doc, respuesta_bc);
+  if (error) { Serial.println(error.c_str()); intentos_raspberry++;}
+  int json_tama=doc.size();
+  String Nombre = doc["Nombre"];
+ 
+
+    //Serial.println("RESPUESTA WEB");
+ if (Nombre=="Res_Cor_1")
+  {  
+   String Nombre_sensor= doc["Nombre"];
+   String Fecha_sensor=doc["Fecha"] ; 
+   String Ultimo_sensor=doc["Ultimo"];
+ 
+     Estados_s1=doc["Estados"].as<const char*>();
+String     Par_1=doc["Par_1"];
+//Serial.print("           Estados desde web:");
+//Serial.println(Estados_s1);
+
+            Estados_Fecha_1_web=Fecha_sensor;
+           long nueva_resta= Resta_fechas(Estados_Fecha_1_loc,Estados_Fecha_1_web);
+            
+       //     Serial.println(nueva_resta);
+  
+             if(Estados_Fecha_1!=Estados_Fecha_1_web && nueva_resta> 0)
+             {
+                    Estados_s1=Estados_s1;
+                    Estados_Fecha_1=Fecha_sensor;
+                  //  Serial.println("CAMBIE ESTADO");
+             }
+
+     doc["Estados_Fecha_1"]  = Estados_Fecha_1;
+              serializeJson(doc, json_modificado); 
+               Serial.println(json_modificado);
+                 smartdelay(5000);  
+  } 
+  
+  //   Serial.println(respuesta_bc);
+    
+     serialEvent();
+    
+}
+ 
+String postWeb( String data_s) {
+  String getAll;
+  String getBody;
+
+  //String serverName_post="brayancastro.com";
+  //String serverPath_post="/TERMOMETRIAS/Torres/Ins_json.php";
+ 
+ 
+
+    String serverName_post="brayancastro.com";
+  String serverPath_post="/KOTSALA-admin/Ins_json.php";
+  
+ // Serial.println("Connecting to server: " + serverName_post);
+
+  if (client.connect(serverName_post.c_str(), serverPort)) {
+   // Serial.println("Connection successful!");   
+ 
+    
+    
+          String httpRequestData  = " data=" +data_s ;
+   //    Serial.println(httpRequestData);
+ 
+      client.print(String("POST ") + serverPath_post + " HTTP/1.1\r\n");
+      client.print(String("Host: ") + serverName_post + "\r\n");
+      client.println("Connection: close");
+      client.println("Content-Type: application/x-www-form-urlencoded");
+      client.print("Content-Length: ");
+      client.println(httpRequestData.length());
+
+
+          client.println("User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit 537.36 (KHTML, like Gecko) Chrome");
+    client.println("Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,/;q=0.8");
+
+    
+      client.println();
+      client.println(httpRequestData);
+ 
+ 
+    
+   
+    int timoutTimer = 10000;
+    long startTimer = millis();
+    boolean state = false;
+    
+    while ((startTimer + timoutTimer) > millis()) {
+     // Serial.print(".");
+ 
+      delay(100);      
+      while (client.available()) {
+        char c = client.read();
+        if (c == '\n') {
+          if (getAll.length()==0) { state=true; }
+          getAll = "";
+        }
+        else if (c != '\r') { getAll += String(c); }
+        if (state==true) { getBody += String(c); }
+        startTimer = millis();
+      }
+      if (getBody.length()>0) { break; }
+    }
+  //  Serial.println();
+    client.stop();
+   //    Serial.println("respuesta cg");
+//   Serial.println(getBody);
+  
+  }
+  else {
+    getBody = "Connection to " + serverName_post +  " failed.";
+    //Serial.println(getBody);
+  }
+  return getBody;
+}
+
+void serialEvent() {
+  String receivedData = Serial.readStringUntil('\n'); // Lee la cadena hasta '\n'
+   //Serial.println(receivedData);
+  // Deserializa el JSON recibido
+  StaticJsonDocument<1000> doc;
+  DeserializationError error = deserializeJson(doc, receivedData);
+  if (error) {
+   // Serial.println("Error al analizar JSON");
+    return;
+  }
+
+  // Accede al valor del campo "Nombre"
+  String nombre = doc["Nombre"];
+
+if (nombre == "Cor_1") {
+    
+    // Accede a los campos específicos de Cor_1
+     sensor1Cor1 = doc["Sensor1"].as<String>();
+     sensor2Cor1 = doc["Sensor2"].as<String>();
+     sensor3Cor1 = doc["Sensor3"].as<String>();
+     sensor4Cor1 = doc["Sensor4"].as<String>();
+     sensor5Cor1 = doc["Sensor5"].as<String>();
+     sensor6Cor1 = doc["Sensor6"].as<String>();
+     sensor7Cor1 = doc["Sensor7"].as<String>();
+     sensor8Cor1 = doc["Sensor8"].as<String>();
+    
+    // Realiza acciones con los datos de Cor_1
+    Serial.println("Datos de Cor_1:");
+    Serial.println("sensor1: " + sensor1Cor1);
+    Serial.println("sensor2: " + sensor2Cor1);
+    Serial.println("sensor3: " + sensor3Cor1);
+    Serial.println("sensor4: " + sensor4Cor1);
+    Serial.println("sensor5: " + sensor5Cor1);
+    Serial.println("sensor6: " + sensor6Cor1);
+    Serial.println("sensor7: " + sensor7Cor1);
+    Serial.println("sensor8: " + sensor8Cor1);
+      DateTime now = rtc.now();
+    
+ char Fecha_format[24];
+sprintf(Fecha_format, "%04d-%02d-%02d %02d:%02d:%02d",now.year(), now.month(), now.day(),now.hour(),now.minute(),now.second());
+
+
+       String Estados_ser1 = doc["Estados_1"];
+
+   Serial.print("           Estados desde serial:");
+Serial.println(Estados_ser1);
+
+
+    if(Estados_ser1 != NULL)
+   if(Estados_s1_ant!= Estados_ser1)
+   {
+    Estados_Fecha_1_loc=String(Fecha_format);
+    Estados_s1=Estados_ser1;
+    Estados_s1_ant=Estados_ser1;
+   }
+
+
+    // ... y así sucesivamente para los otros campos de Cor_1
+  } else if (nombre == "Cor_2") {
+       // Accede a los campos específicos de Cor_1
+     fechaCor2 = doc["Fecha"].as<String>();
+     sensor1Cor2 = doc["Sensor1"].as<String>();
+     sensor2Cor2 = doc["Sensor2"].as<String>();
+     sensor3Cor2 = doc["Sensor3"].as<String>();
+     sensor4Cor2 = doc["Sensor4"].as<String>();
+     sensor5Cor2 = doc["Sensor5"].as<String>();
+     sensor6Cor2 = doc["Sensor6"].as<String>();
+     sensor7Cor2 = doc["Sensor7"].as<String>();
+     sensor8Cor2 = doc["Sensor8"].as<String>();
+    
+    // Realiza acciones con los datos de Cor_2
+    Serial.println("Datos de Cor_2:");
+    Serial.println("Fecha: " + fechaCor2);
+    Serial.println("sensor1: " + sensor1Cor2);
+    Serial.println("sensor2: " + sensor2Cor2);
+    Serial.println("sensor3: " + sensor3Cor2);
+    Serial.println("sensor4: " + sensor4Cor2);
+    Serial.println("sensor5: " + sensor5Cor2);
+    Serial.println("sensor6: " + sensor6Cor2);
+    Serial.println("sensor7: " + sensor7Cor2);
+    Serial.println("sensor8: " + sensor8Cor2);
+
+
+    
+   
+  } else {
+    Serial.println("Nombre de objeto desconocido: " + nombre);
+  }
+}
+static void smartdelay(unsigned long ms)
+{
+  unsigned long start = millis();
+  do
+  {
+    serialEvent();
+  } while (millis() - start < ms);
+}
